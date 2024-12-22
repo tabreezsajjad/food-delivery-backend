@@ -1,107 +1,132 @@
 const Cart = require('../models/cartModel');
 
-//Fetch Cart
-
+// Fetch Cart
 const getCart = async (req, res) => {
-    const { uid } = req.params;
-    try {
-      let cart = await Cart.findOne({ uid });
-      if (!cart) {
-        cart = new Cart({ uid, items: [], restaurantId: null });
-        await cart.save();
-      }
-      res.status(200).json({ items: cart.items, restaurantId: cart.restaurantId });
-    } catch (error) {
-      console.error('Error fetching cart:', error);
-      res.status(500).json({ error: 'Failed to fetch cart' });
-    }
-  };
-  
-//Add items to the cart
-
-const addItemToCart = async (req, res) => {
-    const { userId, item, restaurantId } = req.body;
-  
-    // Validate required fields
-    if (!userId || !item || !restaurantId) {
-      return res.status(400).json({ error: 'Missing required fields: userId, item, or restaurantId' });
-    }
-  
-    try {
-      // Find or create the cart
-      let cart = await Cart.findOne({ uid: userId });
-      if (!cart) {
-        cart = new Cart({ uid: userId, items: [], restaurantId: null });
-      }
-  
-      // Reset the cart if the restaurantId changes
-      if (cart.restaurantId && cart.restaurantId !== restaurantId) {
-        cart.items = [];
-      }
-  
-      cart.restaurantId = restaurantId;
-  
-      // Check if item exists in the cart
-      const existingItem = cart.items.find((cartItem) => cartItem.name === item.name);
-      if (existingItem) {
-        existingItem.quantity = (existingItem.quantity || 1) + 1;
-      } else {
-        cart.items.push({ ...item, quantity: 1 });
-      }
-  
+  const { uid } = req.params;
+  try {
+    let cart = await Cart.findOne({ uid });
+    if (!cart) {
+      cart = new Cart({ uid, items: [], restaurantId: null });
       await cart.save();
-      res.status(200).json({ message: 'Item added to cart successfully' });
-    } catch (error) {
-      console.error('Error adding item to cart:', error);
-      res.status(500).json({ error: 'Failed to add item to cart' });
     }
-  };
-  
-  //Clear Cart
+    res.status(200).json({ items: cart.items, restaurantId: cart.restaurantId });
+  } catch (error) {
+    console.error('Error fetching cart:', error);
+    res.status(500).json({ error: 'Failed to fetch cart' });
+  }
+};
 
-  const clearCart = async (req, res) => {
-    const { userId } = req.body;
-    try {
-      await Cart.deleteOne({ uid: userId });
-      res.status(200).json({ message: 'Cart cleared successfully' });
-    } catch (error) {
-      console.error('Error clearing cart:', error);
-      res.status(500).json({ error: 'Failed to clear cart' });
-    }
-  };
-  
-  
-  //get the total price of items in the cart
+// Add Items to Cart
+const addItemToCart = async (req, res) => {
+  const { userId, item, restaurantId } = req.body;
 
-  const getCartTotal = async (req, res) => {
-    const { uid } = req.params;
-  
-    try {
-      // Find the cart for the given user ID
-      const cart = await Cart.findOne({ uid });
-  
-      if (!cart || cart.items.length === 0) {
-        // If no cart or cart is empty, return total price as 0
-        return res.status(200).json({ totalPrice: 0 });
-      }
-  
-      // Calculate the total price by summing up price * quantity for each item
-      const totalPrice = cart.items.reduce((total, item) => {
-        return total + (item.price * (item.quantity || 1)); // Default quantity is 1
-      }, 0);
-  
-      // Respond with the calculated total price
-      res.status(200).json({ totalPrice });
-    } catch (error) {
-      console.error('Error fetching cart total:', error);
-      res.status(500).json({ error: 'Failed to fetch cart total' });
+  if (!userId || !item || !restaurantId) {
+    return res.status(400).json({ error: 'Missing required fields: userId, item, or restaurantId' });
+  }
+
+  try {
+    let cart = await Cart.findOne({ uid: userId });
+    if (!cart) {
+      cart = new Cart({ uid: userId, items: [], restaurantId: null });
     }
-  };
-  
-  
+
+    if (cart.restaurantId && cart.restaurantId !== restaurantId) {
+      cart.items = [];
+      cart.restaurantId = null;
+      await cart.save();
+      return res.status(409).json({
+        message: 'Cart items cleared due to restaurant change.',
+      });
+    }
+
+    cart.restaurantId = restaurantId;
+
+    const existingItem = cart.items.find((cartItem) => cartItem.name === item.name);
+    if (existingItem) {
+      existingItem.quantity = (existingItem.quantity || 1) + 1;
+    } else {
+      cart.items.push({ ...item, quantity: 1 });
+    }
+
+    await cart.save();
+    res.status(200).json({ message: 'Item added to cart successfully' });
+  } catch (error) {
+    console.error('Error adding item to cart:', error);
+    res.status(500).json({ error: 'Failed to add item to cart' });
+  }
+};
+
+// Update Item Quantity
+const updateItemQuantity = async (req, res) => {
+  const { userId, itemName, quantity } = req.body;
+
+  if (!userId || !itemName || typeof quantity !== 'number') {
+    return res.status(400).json({ error: 'Missing required fields: userId, itemName, or quantity' });
+  }
+
+  try {
+    const cart = await Cart.findOne({ uid: userId });
+    if (!cart) {
+      return res.status(404).json({ error: 'Cart not found' });
+    }
+
+    const item = cart.items.find((cartItem) => cartItem.name === itemName);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found in cart' });
+    }
+
+    if (quantity < 1) {
+      cart.items = cart.items.filter((cartItem) => cartItem.name !== itemName);
+    } else {
+      item.quantity = quantity;
+    }
+
+    await cart.save();
+    res.status(200).json({ message: 'Item quantity updated successfully' });
+  } catch (error) {
+    console.error('Error updating item quantity:', error);
+    res.status(500).json({ error: 'Failed to update item quantity' });
+  }
+};
+
+// Clear Cart
+const clearCart = async (req, res) => {
+  const { userId } = req.body;
+  try {
+    await Cart.deleteOne({ uid: userId });
+    res.status(200).json({ message: 'Cart cleared successfully' });
+  } catch (error) {
+    console.error('Error clearing cart:', error);
+    res.status(500).json({ error: 'Failed to clear cart' });
+  }
+};
+
+// Get Cart Total
+const getCartTotal = async (req, res) => {
+  const { uid } = req.params;
+
+  try {
+    const cart = await Cart.findOne({ uid });
+
+    if (!cart || cart.items.length === 0) {
+      return res.status(200).json({ totalPrice: 0 });
+    }
+
+    const totalPrice = cart.items.reduce((total, item) => {
+      return total + item.price * (item.quantity || 1);
+    }, 0);
+
+    res.status(200).json({ totalPrice });
+  } catch (error) {
+    console.error('Error fetching cart total:', error);
+    res.status(500).json({ error: 'Failed to fetch cart total' });
+  }
+};
+
 module.exports = {
-    getCart,
-    addItemToCart,
-    clearCart,
-    getCartTotal,
+  getCart,
+  addItemToCart,
+  updateItemQuantity,
+  clearCart,
+  getCartTotal,
 };
