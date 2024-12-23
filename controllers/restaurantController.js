@@ -37,9 +37,9 @@ const getNearbyRestaurants = async (req, res) => {
   try {
     let restaurants;
 
-    // If query is present, search by name or menu item
+    // Fuzzy search when query is present
     if (query) {
-      const regex = new RegExp(query, 'i'); // Case-insensitive search
+      const regex = new RegExp(query.split('').join('.*'), 'i'); // Creates a loose matching regex
       restaurants = await Restaurant.find({
         $or: [
           { name: { $regex: regex } },
@@ -47,7 +47,7 @@ const getNearbyRestaurants = async (req, res) => {
         ],
       });
     } else {
-      // Search based on location if query is not present
+      // Default nearby restaurant search
       restaurants = await Restaurant.find({
         location: {
           $near: {
@@ -67,6 +67,7 @@ const getNearbyRestaurants = async (req, res) => {
     res.status(500).json({ error: 'Error fetching restaurants' });
   }
 };
+
 
 
 
