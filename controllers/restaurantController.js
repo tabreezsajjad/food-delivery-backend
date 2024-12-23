@@ -35,34 +35,39 @@ const getNearbyRestaurants = async (req, res) => {
   const { lat, lng, radius, query } = req.query;
 
   try {
-    // Build the base query for nearby restaurants
-    const baseQuery = {
-      location: {
-        $near: {
-          $geometry: {
-            type: 'Point',
-            coordinates: [parseFloat(lng), parseFloat(lat)],
-          },
-          $maxDistance: parseFloat(radius) * 1000, // Convert km to meters
-        },
-      },
-    };
+    let restaurants;
 
-    // Add search query for name or menu description
+    // If query is present, search by name or menu item
     if (query) {
-      baseQuery.$or = [
-        { name: { $regex: query, $options: 'i' } }, // Search in restaurant name
-        { 'menu.description': { $regex: query, $options: 'i' } }, // Search in menu items
-      ];
+      const regex = new RegExp(query, 'i'); // Case-insensitive search
+      restaurants = await Restaurant.find({
+        $or: [
+          { name: { $regex: regex } },
+          { 'menu.description': { $regex: regex } },
+        ],
+      });
+    } else {
+      // Search based on location if query is not present
+      restaurants = await Restaurant.find({
+        location: {
+          $near: {
+            $geometry: {
+              type: 'Point',
+              coordinates: [parseFloat(lng), parseFloat(lat)],
+            },
+            $maxDistance: parseFloat(radius) * 1000, // Convert km to meters
+          },
+        },
+      });
     }
 
-    const restaurants = await Restaurant.find(baseQuery);
     res.status(200).json(restaurants);
   } catch (error) {
-    console.error('Error fetching nearby restaurants:', error);
-    res.status(500).json({ error: 'Error fetching nearby restaurants' });
+    console.error('Error fetching restaurants:', error);
+    res.status(500).json({ error: 'Error fetching restaurants' });
   }
 };
+
 
 
 //Get Restaurant By Id
