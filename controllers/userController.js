@@ -128,7 +128,19 @@ const saveAddress = async (req, res) => {
     const isDuplicate = user.addresses.some(addr => {
       const existing = addr.deliveryAddress.trim().toLowerCase();
       const incoming = address.deliveryAddress.trim().toLowerCase();
-      return existing === incoming && addr.deliveryLocation.lat === address.deliveryLocation.lat && addr.deliveryLocation.lng === address.deliveryLocation.lng;
+
+      const areLocationsClose = (loc1, loc2) => {
+        const threshold = 0.0001; // Adjust threshold for floating-point differences
+        return (
+          Math.abs(loc1.lat - loc2.lat) <= threshold &&
+          Math.abs(loc1.lng - loc2.lng) <= threshold
+        );
+      };
+
+      return (
+        existing === incoming &&
+        areLocationsClose(addr.deliveryLocation, address.deliveryLocation)
+      );
     });
 
     if (isDuplicate) {
@@ -143,6 +155,7 @@ const saveAddress = async (req, res) => {
     res.status(500).json({ error: 'Failed to save address', details: error.message });
   }
 };
+
 
 const getOrderDeliveryLocation= async (req, res) => {
   const { uid, orderId } = req.params;
